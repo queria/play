@@ -18,7 +18,7 @@ my $music = "/all/hudba/";
 
 sub find_artist {
 	my ($dir) = shift;
-	die("Neplatný adresář") if not -d $dir;
+	die("Neplatný adresář") if not $dir or not -d $dir;
 
 	opendir(my $d, $dir) || die("selhalo otevreni adresare");
 	my @artists = grep { !/^\./ and -d $dir.'/'.$_ } readdir($d);
@@ -106,7 +106,7 @@ Options:
     music_dir             select random subdir from music_dir as source of songs
 
 Without music_dir/exact dir B<play> will use predefined
-music directory (/all/hudba).
+music directory (see $music at start of source code).
 
 =head1 EXAMPLES
 

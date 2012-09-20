@@ -50,8 +50,11 @@ def help():
     usage(1)
 
 def man():
-    print("play -\tscript to choose subdirectory (artist)\n",
+    print("*play* \tscript to choose subdirectory (artist)\n",
     "\tand play all music files contained (recursively looked up)")
+    print()
+    print("[exact]\tmeans that specified music-dir will be searched for\n",
+            "\tsound files as a whole, no artist-subdir selection will occure")
     print()
     help()
 
