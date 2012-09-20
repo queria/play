@@ -8,7 +8,7 @@ use Cwd qw/ abs_path /;
 
 
 # --- default configuration ------
-my $player = "mplayer -shuffle -quiet -vo null -playlist";
+my $player = "mplayer -shuffle -msglevel all=-1:demux=4:statusline=5 -vo null -playlist";
 my $music = "/all/hudba/";
 
 # --- end of def. configuration --

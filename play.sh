@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- configuration: -------------
-PLAYER="mplayer -shuffle -quiet -playlist -vo null"
+PLAYER="mplayer -shuffle -msglevel all=-1:demux=4:statusline=5 -playlist -vo null"
 MUSIC_DIR="/all/hudba/"
 
 # --- end of configuration -------

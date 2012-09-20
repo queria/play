@@ -11,7 +11,7 @@ from subprocess import call, PIPE
 
 # --- default configuration ------
 #player = "mplayer -shuffle -quiet -vo null -playlist";
-player = ['mplayer','-shuffle','-quiet','-vo','null','-playlist'];
+player = ['mplayer','-shuffle','-msglevel','all=-1:demux=4:statusline=5','-vo','null','-playlist'];
 collection = "/all/hudba/";
 # --- end default configuration --
 
