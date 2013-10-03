@@ -11,17 +11,20 @@ from subprocess import call, PIPE
 
 # --- default configuration ------
 #player = "mplayer -shuffle -quiet -vo null -playlist";
-player = ['mplayer','-shuffle','-msglevel','all=-1:demux=4:statusline=5','-vo','null','-playlist'];
-collection = "/all/hudba/";
+player = ['mplayer', '-shuffle',
+          '-msglevel', 'all=-1:demux=4:statusline=5',
+          '-vo', 'null', '-playlist']
+collection = "/all/hudba/"
 # --- end default configuration --
 
-def find_songs(dir):
-    supported = ('mp3','ogg','flv')
+
+def find_songs(dir_):
+    supported = ('mp3', 'ogg', 'flv', 'flac')
     songs = []
-    dirs = [dir]
-    for dir in dirs:
-        for sub in os.listdir(dir):
-            pathname = os.path.join(dir,sub)
+    dirs = [dir_]
+    for dir_ in dirs:
+        for sub in os.listdir(dir_):
+            pathname = os.path.join(dir_, sub)
             mode = os.stat(pathname)[ST_MODE]
             if S_ISDIR(mode):
                 dirs.append(pathname)
@@ -29,15 +32,17 @@ def find_songs(dir):
                 songs.append(pathname)
     return songs
 
-def select_artist(dir):
+
+def select_artist(dir_):
     subdirs = []
-    for sub in os.listdir(dir):
-        pathname = os.path.join(dir,sub)
+    for sub in os.listdir(dir_):
+        pathname = os.path.join(dir_, sub)
         if os.path.isdir(pathname):
             subdirs.append(pathname)
     if not subdirs:
         return ''
     return choice(subdirs)
+
 
 def usage(code, msg=''):
     if msg:
@@ -46,15 +51,17 @@ def usage(code, msg=''):
     #print(__doc__ % globals())
     sys.exit(code)
 
+
 def help():
     usage(1)
 
+
 def man():
     print("*play* \tscript to choose subdirectory (artist)\n",
-    "\tand play all music files contained (recursively looked up)")
+          "\tand play all music files contained (recursively looked up)")
     print()
     print("[exact]\tmeans that specified music-dir will be searched for\n",
-            "\tsound files as a whole, no artist-subdir selection will occure")
+          "\tsound files as a whole, no artist-subdir selection will occure")
     print()
     help()
 
@@ -91,16 +98,18 @@ if not opt_exact:
 
 songs = find_songs(selected)
 
-f = NamedTemporaryFile(mode='w',dir='/tmp/',prefix='play_',suffix='.pls',delete=False)
-print("\n".join(songs),file=f)
-cmd = player + [f.name]
-f.close()
+file_ = NamedTemporaryFile(
+    mode='w', dir='/tmp/',
+    prefix='play_', suffix='.pls',
+    delete=False)
+print("\n".join(songs), file=file_)
+cmd = player + [file_.name]
+file_.close()
 
 try:
-    call(cmd) #, stdout=PIPE)
-except OSError as e:
+    call(cmd)
+except (OSError, KeyboardInterrupt) as e:
     print("... koncim")
 
 
-os.unlink(f.name)
-
+os.unlink(file_.name)
