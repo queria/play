@@ -3,13 +3,13 @@
 # vim: set et sw=4 ts=4 ft=python:
 """play.py [-h|--help] [-m|--man] [-e|--exact] [music-dir]"""
 from __future__ import print_function
+import mplayer
 import os
-import sys
 import random
 import stat
-import mplayer
-import time
 import subprocess
+import sys
+import time
 
 import qsio
 
@@ -76,6 +76,7 @@ class Player(object):
         self._changed = False
         self.volume_diff = 5
         self._last_vol = None
+        self._cols = self._term_cols()
 
     def _find_songs(self, dir_):
         supported = ('mp3', 'ogg', 'flv', 'flac')
@@ -110,6 +111,7 @@ class Player(object):
             '=': (self.volume_up,),
             '+': (self.volume_up,),
             '-': (self.volume_down,),
+            'e': (self.jump_end,),
             'n': (self.next_song,),
             'p': (self.prev_song,),
             'i': (self.print_song_info,),
@@ -123,9 +125,14 @@ class Player(object):
             p = self._player
             while self.song:
                 p.loadfile(self.song)
+                # wait till file is loaded
+                while p.paused is None:
+                    time.sleep(0.1)
+                # restore volume
                 if self._last_vol is None:
                     self._last_vol = p.volume
                 p.volume = self._last_vol
+                # play file
                 if p.paused:
                     p.pause()
                 # whole song
@@ -137,18 +144,21 @@ class Player(object):
                 print('\r')
 
     def _playing_sleep(self):
-        if self._changed or self._player.time_pos == self._player.length:
+        if self._changed or self._player.percent_pos is None:
             self._changed = False
             return False
-        print("[%d/%d] %s %s%% [%d/%d sec] [vol=%s%%]    \r"
-              % (
-                  self._current + 1,
-                  len(self._songs),
-                  self.song,
-                  self._player.percent_pos,
-                  sround(self._player.time_pos),
-                  sround(self._player.length),
-                  self._player.volume),
+        paused = 'PAUSED' if self._player.paused else ''
+        msg_format = "[%d/%d] %s %s%% [%d/%d sec] [vol=%s%%] %s"
+        msg_data = (
+            self._current + 1,
+            len(self._songs),
+            self.song,
+            self._player.percent_pos,
+            sround(self._player.time_pos),
+            sround(self._player.length),
+            sround(self._player.volume),
+            paused)
+        print("%s\r" % (msg_format % msg_data).ljust(self._cols - 1),
               end='')
         time.sleep(0.2)
         return True
@@ -186,6 +196,12 @@ class Player(object):
         self._current = len(self._songs)
         self._finish_song()
 
+    def jump_end(self):
+        try:
+            self._player.time_pos = self._player.length - 10
+        except TypeError:
+            pass  # weird float error in mplayer.py?
+
     def _finish_song(self):
         try:
             self._player.time_pos = self._player.length
@@ -194,10 +210,15 @@ class Player(object):
         self._changed = True
 
     def print_song_info(self):
-        print("%s [%ss]\r" % (self.song,
-                              self._player.length))
         if self._player.metadata:
-            print("%s\r" % (self._player.metadata,))
+            md = self._player.metadata
+            print('\r')
+            for k, v in md.iteritems():
+                print(' %s: %s\r' % (k, v))
+
+    def _term_cols(self):
+        (rows, cols) = subprocess.check_output(['stty', 'size']).split()
+        return int(cols)
 
 
 def main():
