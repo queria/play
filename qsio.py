@@ -65,6 +65,7 @@ class NonBlockingKeypress(object):
         self._pass_keys = pass_keys
         self._input_fd = source.fileno()
         self._input_attrs = termios.tcgetattr(self._input_fd)
+        self._passthrough = None
 
         if keymap is not None:
             for key, actions in keymap.iteritems():
@@ -88,12 +89,25 @@ class NonBlockingKeypress(object):
         except KeyError:
             return None
 
-    def reg_key(self, key, action, override=False):
+    def reg_key(self, key, action, override=False, pass_key=None,
+                pass_backref=False):
         if override:
             self.unreg_key(key)
         if key not in self._keymap:
             self._keymap[key] = []
-        self._keymap[key].append(action)
+        complex_action = {'callback': action, 'backref': pass_backref}
+        if pass_key is not None:
+            complex_action['passkey'] = pass_key
+        self._keymap[key].append(complex_action)
+
+    def passthrough(self, action):
+        if action is None:
+            self._passthrough = None
+            return
+        self._passthrough = {'callback': action,
+                             'backref': True,
+                             'passkey': True,
+                             }
 
     def process_keys(self):
         while True:
@@ -102,7 +116,10 @@ class NonBlockingKeypress(object):
                 return False
             if c is None:
                 break
-            if c in self._keymap:
+            if self._passthrough is not None:
+                self._call(self._passthrough, c)
+                break
+            elif c in self._keymap:
                 for action in self._keymap[c]:
                     self._call(action, c)
             elif 'default' in self._keymap:
@@ -114,10 +131,13 @@ class NonBlockingKeypress(object):
         return True
 
     def _call(self, action, char):
-        if self._pass_keys:
-            action(char)
-        else:
-            action()
+        passkey = action.get('passkey', self._pass_keys)
+        args = []
+        if action.get('backref', False):
+            args.append(self)
+        if passkey:
+            args.append(char)
+        action['callback'](*args)
 
 if __name__ == '__main__':
     import time
