@@ -318,7 +318,7 @@ class Player(object):
         if ord(char) == 13:  # enter
             wanted = self._search_hit
             self._stop_search(keybd)
-            self.jump_to_name(wanted.path)
+            self.jump_to_name(wanted.path, move_in_queue=True)
         elif ord(char) == 27:  # escape
             self._stop_search(keybd)
         else:
@@ -383,20 +383,30 @@ class Player(object):
         self._current = len(self._songs)
         self._finish_song()
 
-    def jump_to(self, index):
+    def jump_to(self, index, move_in_queue=False):
         if index < 0 or index >= len(self._songs):
             print('invalid index')
             return False
-        self._current = index - 1
+        if move_in_queue:
+            # move the 'index' song
+            # just behing current one
+            self._songs.insert(
+                self._current + 1,
+                self._songs.pop(index))
+        else:
+            # just jump to position
+            # before 'index' song
+            self._current = index - 1
+        # as finish_song will move one next after current
         self._finish_song()
         return True
 
-    def jump_to_name(self, song_name):
+    def jump_to_name(self, song_name, move_in_queue=False):
         if not song_name:
             return False
         for idx, song in enumerate(self._songs):
             if song_name == song.path:
-                return self.jump_to(idx)
+                return self.jump_to(idx, move_in_queue)
         return False
 
     def jump_end(self):
