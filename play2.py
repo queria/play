@@ -420,8 +420,13 @@ class Player(object):
         if not printout:
             return self._songs
         print('')
-        print('\n\r'.join(['%s (%s)' % (s.path, s)
-                           for s in self._songs]))
+        print('\n\r'.join([
+            ('%s (%s)%s' % (
+                s.path,
+                s,
+                ' <================' if s == self.song else ''
+            ))
+            for s in self._songs]))
         print('\n\r', end='')
 
     def _term_cols(self):
