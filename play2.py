@@ -24,7 +24,7 @@ def usage(code, msg=''):
     if msg:
         print("** Error: ", msg)
     print(__doc__)
-    #print(__doc__ % globals())
+    # print(__doc__ % globals())
     sys.exit(code)
 
 
@@ -91,11 +91,14 @@ class SongInfo(object):
 
         if songpath:
             self._extract_info(songpath, use_tags)
+        else:
+            self._text = '- not found -'
+            return
 
         extra = []
         if self.length:
-            #l = u'%ds' % round(self.length)
-            #extra.append(l)
+            # l = u'%ds' % round(self.length)
+            # extra.append(l)
             self._length_perc = self.length/100
         if self.bitrate:
             bt = self.bitrate
@@ -150,13 +153,7 @@ class SongInfo(object):
 class Player(object):
     def __init__(self, music_dir, exact_folder=False, shuffle=True,
                  show_tags=True):
-        if not exact_folder:
-            music_dir = self._select_artist(music_dir)
-        self._songs = self._find_songs(music_dir)
-        if shuffle:
-            random.shuffle(self._songs)
-        else:
-            self._songs = sorted(self._songs)
+        self._no_song = SongInfo('')
         self._player = mplayer.Player(args=('-novideo',),
                                       stderr=subprocess.STDOUT)
         self._changed = False
@@ -165,9 +162,20 @@ class Player(object):
         self._cols = self._term_cols()
         self._last_info = None
         self._searching = None
-        self._search_hit = ''
+        self._search_hit = self._no_song
         self._search_changed = False
         self.show_tags = show_tags
+
+        if not exact_folder:
+            music_dir = self._select_artist(music_dir)
+        self._songs = [
+            SongInfo(song_file, self.show_tags)
+            for song_file
+            in self._find_songs(music_dir)]
+        if shuffle:
+            random.shuffle(self._songs)
+        else:
+            self._songs = sorted(self._songs)
 
     def _find_songs(self, dir_):
         supported = ('mp3', 'ogg', 'flv', 'flac', 'webm', 'mp4')
@@ -218,9 +226,10 @@ class Player(object):
 
             # whole playlist
             p = self._player
-            while self.song:
-                print("%s\r" % (self.songinfo), end='')  # FIXME
-                p.loadfile(self.song)
+            while self.song and self.song.path:
+                print("%s\r" % (self.song), end='')
+                # FIXME(queria|later): ^^ what should be fixed here?
+                p.loadfile(self.song.path)
                 # wait till file is loaded
                 while p.paused is None:
                     time.sleep(0.1)
@@ -246,8 +255,10 @@ class Player(object):
         time.sleep(0.01)
         if self._searching is not None:
             if self._search_changed:
-                search_msg = 'search: %s  => %s' % (
-                    self._searching, self._search_hit)
+                search_msg = 'search: %s  => %s (%s)' % (
+                    self._searching,
+                    self._search_hit.path,
+                    self._search_hit)
                 search_msg = search_msg.ljust(self._cols - 1)
                 # self._search_changed = False
                 # FIXME(queria): update has to be done twice
@@ -270,15 +281,15 @@ class Player(object):
             msg_data = (
                 self._current + 1,
                 len(self._songs),
-                unicode(self.songinfo),
-                self.songinfo.percent_pos(self._player.time_pos),
+                unicode(self.song),
+                self.song.percent_pos(self._player.time_pos),
                 paused)
         except UnicodeEncodeError as exc:
             msg_data = (
                 self._current + 1,
                 len(self._songs),
                 str(exc),
-                self.songinfo.percent_pos(self._player.time_pos),
+                self.song.percent_pos(self._player.time_pos),
                 paused)
         msg = msg_format % msg_data
         vol = '[vol=%s%%]' % sround(self._player.volume)
@@ -301,7 +312,7 @@ class Player(object):
         if ord(char) == 13:  # enter
             wanted = self._search_hit
             self._stop_search(keybd)
-            self.jump_to_name(wanted)
+            self.jump_to_name(wanted.path)
         elif ord(char) == 27:  # escape
             self._stop_search(keybd)
         else:
@@ -310,16 +321,17 @@ class Player(object):
                 self._searching = self._searching[:-1]
             else:
                 self._searching += char
-            self._search_hit = '- not found -'
+            self._search_hit = self._no_song
             for song in self._songs:
-                if self._searching in song:
+                if (self._searching in song.path
+                        or self._searching in str(song)):
                     self._search_hit = song
                     break
 
     def _stop_search(self, keybd):
         self._search_changed = True
         self._searching = None
-        self._search_hit = ''
+        self._search_hit = self._no_song
         keybd.passthrough(None)
 
     @property
@@ -331,13 +343,14 @@ class Player(object):
             return None
 
     @property
-    def songinfo(self):
-        songpath = self.song
-        if not songpath:
-            return SongInfo('')
-        if self._last_info is None or songpath != self._last_info.path:
-            self._last_info = SongInfo(songpath, self.show_tags)
-        return self._last_info
+    def songinfo(self, i_know_this_is_deprecated=False):
+        if not i_know_this_is_deprecated:
+            print('songinfo is deprecated, use just song now'
+                  ' or pass i_know_this_is_deprecated=True')
+        info = self.song
+        if not info:
+            return self._no_song
+        return info
 
     def volume_up(self):
         self._player.volume = min(
@@ -373,8 +386,10 @@ class Player(object):
         return True
 
     def jump_to_name(self, song_name):
+        if not song_name:
+            return False
         for idx, song in enumerate(self._songs):
-            if song_name == song:
+            if song_name == song.path:
                 return self.jump_to(idx)
         return False
 
@@ -405,7 +420,8 @@ class Player(object):
         if not printout:
             return self._songs
         print('')
-        print('\n\r'.join(self._songs))
+        print('\n\r'.join(['%s (%s)' % (s.path, s)
+                           for s in self._songs]))
         print('\n\r', end='')
 
     def _term_cols(self):
@@ -414,7 +430,7 @@ class Player(object):
 
     def _report_nowplaying(self):
         with open(os.path.expanduser('~/.nowplaying'), 'w') as np_file:
-            np_file.write(unicode(self.songinfo).encode('utf-8'))
+            np_file.write(unicode(self.song).encode('utf-8'))
 
     def _clean_nowplaying(self):
         os.remove(os.path.expanduser('~/.nowplaying'))
