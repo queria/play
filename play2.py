@@ -116,9 +116,15 @@ class SongInfo(object):
                 self.album,
                 self.title,
                 extra_str))
+        self._text_for_search = '%s %s' % (
+            self.path.lower(),
+            self._text.lower())
 
     def __str__(self):
         return self._text
+
+    def has_substr(self, substr):
+        return substr in self._text_for_search
 
     def percent_pos(self, time_pos):
         if time_pos is None:
@@ -321,10 +327,10 @@ class Player(object):
                 self._searching = self._searching[:-1]
             else:
                 self._searching += char
+            self._searching = self._searching.lower()
             self._search_hit = self._no_song
             for song in self._songs:
-                if (self._searching in song.path
-                        or self._searching in str(song)):
+                if song.has_substr(self._searching):
                     self._search_hit = song
                     break
 
