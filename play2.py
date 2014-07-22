@@ -216,6 +216,8 @@ class Player(object):
             '=': (self.volume_up,),
             '+': (self.volume_up,),
             '-': (self.volume_down,),
+            '<': (self.jump_back5,),
+            '>': (self.jump_fwd5,),
             'e': (self.jump_end,),
             'n': (self.next_song,),
             'p': (self.prev_song,),
@@ -414,6 +416,21 @@ class Player(object):
             self._player.time_pos = self._player.length - 10
         except TypeError:
             pass  # weird float error in mplayer.py?
+
+    def jump_time(self, steptime=0, stepcount=1):
+        try:
+            while stepcount > 0:
+                self._player.time_pos = max(
+                    0.0, self._player.time_pos + steptime)
+                stepcount -= 1
+        except TypeError as exc:
+            print('Ouch: %s', exc)
+
+    def jump_fwd5(self):
+        self.jump_time(steptime=5, stepcount=1)
+
+    def jump_back5(self):
+        self.jump_time(steptime=-5, stepcount=1)
 
     def reset_term(self):
         self._cols = self._term_cols()
