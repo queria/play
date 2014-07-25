@@ -260,7 +260,10 @@ class Player(object):
         self._clean_nowplaying()
 
     def _playing_sleep(self):
-        time.sleep(0.01)
+        if self._player.paused:
+            time.sleep(0.4)
+        else:
+            time.sleep(0.1)
         if self._searching is not None:
             if self._search_changed:
                 search_msg = 'search: %s  => %s (%s)' % (
