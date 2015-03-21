@@ -56,7 +56,8 @@ class NonBlockingKeypress(object):
         #    'all': (call, for, all, keys),
         #    'default': (call, for, keys, without, specific, binding)
         #   }
-        # pass_keys: bool, if True pass pressed key as first arg to callback
+        # pass_keys: bool, if True pass pressed key as first arg to callback,
+        #   can be also specified per each key-action mapping via reg_key()
         # source: file like object, defaults to sys.stdin (should be/have tty?)
         if source is None:
             source = sys.stdin
@@ -99,6 +100,9 @@ class NonBlockingKeypress(object):
         if pass_key is not None:
             complex_action['passkey'] = pass_key
         self._keymap[key].append(complex_action)
+
+    def dump_keymap(self):
+        return self._keymap
 
     def passthrough(self, action):
         if action is None:

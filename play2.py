@@ -3,9 +3,10 @@
 # vim: set et sw=4 ts=4 ft=python:
 """play.py [-h|--help] [-m|--man] [-n|--notags]
  [-s|--sorted] [-e|--exact] [music-dir]"""
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 import mplayer
 import os
+import pprint
 import random
 import stat
 import subprocess
@@ -77,10 +78,14 @@ def sround(num, scale=0):
         return 0
 
 
+def un(string):
+    return string.decode('utf-8', 'ignore')
+
+
 class SongInfo(object):
     def __init__(self, songpath, use_tags=True):
         self.path = songpath
-        self.filename = os.path.basename(songpath).decode('utf-8')
+        self.filename = os.path.basename(songpath)
         self.title = ''
         self.artist = ''
         self.album = ''
@@ -99,7 +104,7 @@ class SongInfo(object):
         if self.length:
             # l = u'%ds' % round(self.length)
             # extra.append(l)
-            self._length_perc = self.length/100
+            self._length_perc = self.length/100.0
         if self.bitrate:
             bt = self.bitrate
             bt = u'%dkbps' % (bt / 1000)
@@ -107,18 +112,23 @@ class SongInfo(object):
         extra_str = (', '.join(extra)) if extra else ''
 
         if not use_tags or not self.title:
-            self._text = (u'%s [%s]' % (
+            self._text = ('%s [%s]' % (
                 self.filename,
                 extra_str))
         else:
-            self._text = (u'%s - %s - %s [%s]' % (
+            self._text = ('%s - %s - %s [%s]' % (
                 self.artist,
                 self.album,
                 self.title,
                 extra_str))
-        self._text_for_search = '%s %s' % (
-            self.path.lower(),
-            self._text.lower())
+        try:
+            self._text_for_search = '%s %s' % (
+                self.path.lower(),
+                self._text.lower())
+        except UnicodeDecodeError:
+            print('Unable to process %s' % self.path)
+            print('text %s' % self._text.lower())
+            raise
 
     def __str__(self):
         return self._text
@@ -126,10 +136,12 @@ class SongInfo(object):
     def has_substr(self, substr):
         return substr in self._text_for_search
 
-    def percent_pos(self, time_pos):
+    def percent_pos(self, time_pos, raw=False):
         if time_pos is None:
             return '100'
-        p = self._length_perc * time_pos
+        p = time_pos / self._length_perc
+        if raw:
+            return p
         return str(int(round(p)))
 
     def _extract_info(self, songpath, use_tags=True):
@@ -162,39 +174,75 @@ class Player(object):
         self._no_song = SongInfo('')
         self._player = mplayer.Player(args=('-novideo',),
                                       stderr=subprocess.STDOUT)
-        self._changed = False
+        self.music_dir = music_dir
+        self.exact_folder = exact_folder
+        self.shuffle = shuffle
+        self.show_tags = show_tags
         self.volume_diff = 5
         self._last_vol = None
         self._cols = self._term_cols()
+        self._songs = []
+
+        self._pick_playlist()
+
+    def _pick_playlist(self):
+        self._changed = False
         self._last_info = None
         self._searching = None
         self._search_hit = self._no_song
         self._search_changed = False
-        self.show_tags = show_tags
 
-        if not exact_folder:
-            music_dir = self._select_artist(music_dir)
-        self._songs = [
-            SongInfo(song_file, self.show_tags)
-            for song_file
-            in self._find_songs(music_dir)]
-        if shuffle:
+        picked_music_dir = self.music_dir
+        if not self.exact_folder:
+            picked_music_dir = self._select_artist(picked_music_dir)
+        print('\rSelected directory: %s' % picked_music_dir)
+
+        self._songs = self._load_songs(
+            self._find_songs(picked_music_dir))
+
+        print('\rTotal %d songs' % len(self._songs))
+
+        if self.shuffle:
             random.shuffle(self._songs)
+            print('\rShuffled song list.')
         else:
             self._songs = sorted(self._songs)
+
+    def repick_playlist(self):
+        print('')
+        print('\r')
+        self._pick_playlist()
+        self._current = -1
+        self._finish_song()
 
     def _find_songs(self, dir_):
         supported = ('mp3', 'ogg', 'flv', 'flac', 'webm', 'mp4')
         songs = []
         dirs = [dir_]
+        # print('searching for songs: 0')
         for dir_ in dirs:
             for sub in os.listdir(dir_):
-                pathname = os.path.join(dir_, sub)
+                pathname = os.path.join(dir_, sub.decode('utf-8', 'ignore'))
                 mode = os.stat(pathname)[stat.ST_MODE]
                 if stat.S_ISDIR(mode):
                     dirs.append(pathname)
                 elif stat.S_ISREG(mode) and pathname.endswith(supported):
                     songs.append(pathname)
+                print('\rfindings songs: {dirs} dirs, {files} files        '
+                      .format(dirs=len(dirs), files=len(songs)),
+                      end='')
+        print('')
+        return songs
+
+    def _load_songs(self, song_files):
+        songs = []
+        total = len(song_files)
+        for song_file in song_files:
+            songs.append(SongInfo(song_file, self.show_tags))
+            print('\rloading songs: {cur}/{total}'
+                  .format(cur=len(songs), total=total),
+                  end='')
+        print('')
         return songs
 
     def _select_artist(self, dir_):
@@ -227,10 +275,12 @@ class Player(object):
             'P': (self._player.pause,),
             ' ': (self._player.pause,),
             'l': (self.list_songs,),
+            '~': (self.repick_playlist,),
             qsio.NonBlockingKeypress.KEY_INT: (self.stop,),
         }
         with qsio.NonBlockingKeypress(key_map) as keybd:
             keybd.reg_key('/', self._start_search, pass_backref=True)
+            keybd.reg_key('h', lambda: self._show_keybindings(keybd))
 
             # whole playlist
             p = self._player
@@ -345,6 +395,27 @@ class Player(object):
         self._search_hit = self._no_song
         keybd.passthrough(None)
 
+    def _show_keybindings(self, keybd):
+        print('\r')
+        keymap = keybd.dump_keymap()
+        for key, actions in keymap.iteritems():
+            actions_strs = []
+            for action in actions:
+                # actions_strs.append(str(dir(action['callback'])))
+                if not hasattr(action['callback'], 'im_func'):
+                    # type(action['callback']) != 'instancemethod':
+                    continue
+                actions_strs.append('%s' % (
+                    # action['callback'].im_class.__name__,
+                    action['callback'].im_func.__name__,
+                ))
+
+            print('\r "%s" => %s' % (
+                key,
+                ', '.join(actions_strs)
+            ))
+        print('\r')
+
     @property
     def song(self):
         try:
@@ -446,11 +517,16 @@ class Player(object):
         self._changed = True
 
     def print_song_info(self):
+        print('\r')
         if self._player.metadata:
             md = self._player.metadata
-            print('\r')
             for k, v in md.iteritems():
                 print(' %s: %s\r' % (k, v))
+        if self._player.length is not None:
+            print(' length: %s\r' % self.song.length)
+            print(' length_perc: %s\r' % self.song.percent_pos(1, raw=True))
+            print(' current_pos: %s\r' % self._player.time_pos)
+        print('file: %s\r' % self.song.path)
 
     def list_songs(self, printout=True):
         if not printout:
@@ -478,6 +554,8 @@ class Player(object):
 
 
 def main():
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
     opts = get_opts(sys.argv)
     if opts['help']:
         help()
